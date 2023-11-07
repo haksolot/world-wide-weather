@@ -1,21 +1,28 @@
-ARDUINO_DIR = /usr/share/arduino
-
-BOARD_TAG = uno
+BOARD_TAG = arduino:avr:uno
 
 ARDUINO_PORT = /dev/ttyACM0
 
-# ARDUINO_LIBS = Wire SoftwareSerial Adafruit_Sensor Adafruit_BME280 TinyGPSPlus
-
-USER_LIB_PATH = libs
-
-BUILD_DIR = build
+ARDUINO_CLI = arduino-cli
 
 SRC_DIR = src
 
-AVR_TOOLS_DIR = $(ARDUINO_DIR)/hardware/tools/avr
+BUILD_DIR = build
 
-ARDUINO_CORE_PATH = $(ARDUINO_DIR)/hardware/arduino/avr
+BUILD_CMD = $(ARDUINO_CLI) compile -b $(BOARD_TAG) --output-dir $(BUILD_DIR) $(SRC_DIR)
+UPLOAD_CMD = $(ARDUINO_CLI) upload -b $(BOARD_TAG) --port $(ARDUINO_PORT) --input-dir $(BUILD_DIR)
 
-USER_LIB_PATH = $(realpath $(HOME)/Arduino/libraries)
+all: build upload
 
-include $(ARDUINO_CORE_PATH)/Arduino.mk
+build:
+	@echo "Compilation en cours..."
+	@$(BUILD_CMD)
+
+upload:
+	@echo "Téléversement en cours..."
+	@$(UPLOAD_CMD)
+
+clean:
+	@echo "Nettoyage en cours..."
+	@rm -rf $(BUILD_DIR)
+
+.PHONY: all build upload clean
