@@ -34,13 +34,10 @@ Pour installer et exécuter ce projet, suivez ces étapes :
 3. **Compilation et Téléversement :** 
 
 ```bash
-   # Accédez au répertoire du projet
    cd /chemin/vers/le/projet
 
-   # installer les librairies
    mingw32-make libraries
    
-   # Compiler et téléverser
    mingw32-make libraries
 ```
    
