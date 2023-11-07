@@ -33,7 +33,7 @@ Pour installer et exécuter ce projet, suivez ces étapes :
 
 3. **Compilation et Téléversement :** 
 
-   ```bash
+```bash
    # Accédez au répertoire du projet
    cd /chemin/vers/le/projet
 
@@ -42,7 +42,7 @@ Pour installer et exécuter ce projet, suivez ces étapes :
    
    # Compiler et téléverser
    mingw32-make libraries
-   ```
+```
    
 Le lancement du Makefile permettra de compiler et téléverser le code source sur l'arduino
 # Modes
