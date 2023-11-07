@@ -77,7 +77,7 @@ void setup() {
   led.init();
   RTC.begin();
   RTC.adjust(DateTime(F(__DATE__), F(__TIME__)));
-  mode = 5;
+  mode = 0;
   pinMode(BUTTON_RED, INPUT_PULLUP);
   pinMode(BUTTON_GREEN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_RED), clickButtonRedEvent, FALLING);
@@ -91,25 +91,7 @@ void setup() {
 
 void loop() {
   switch (mode) {
-    case 0: // mode standard
-      if (((millis() - debutRed >= 5000) && digitalRead(BUTTON_RED) == 0) && state == false) {
-        state = true;
-        mode = 2;
-      }
-      else if ((millis() - debutGreen >= 5000) && digitalRead(BUTTON_GREEN) == 0) {
-        mode = 3;
-      }
-      if (millis() - timerSD >= LOG_INTERVALL) {
-        Write(getData());
-        timerSD = millis();
-      }
-      led.setColorRGB(0, 0, 255, 0);
-      checkError(0);
-      checkError(1);
-      checkError(2);
-      checkError(3);
-      break;
-
+    
     case 1: // mode config
       if (millis() - configModeStartTime >= CONFIGURATION_TIMEOUT) {
         //Serial.println(CONFIGURATION_TIMEOUT);
@@ -148,6 +130,22 @@ void loop() {
       break;
 
     default: // mode standard
+      if (((millis() - debutRed >= 5000) && digitalRead(BUTTON_RED) == 0) && state == false) {
+          state = true;
+          mode = 2;
+        }
+        else if ((millis() - debutGreen >= 5000) && digitalRead(BUTTON_GREEN) == 0) {
+          mode = 3;
+        }
+        if (millis() - timerSD >= LOG_INTERVALL) {
+          Write(getData());
+          timerSD = millis();
+        }
+        led.setColorRGB(0, 0, 255, 0);
+        checkError(0);
+        checkError(1);
+        checkError(2);
+        checkError(3);
       break;
   }
 }
