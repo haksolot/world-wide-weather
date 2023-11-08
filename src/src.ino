@@ -159,11 +159,12 @@ void clickButtonGreenEvent() {
 
 void Write(String valeur) {
   DateTime now = rtc.now();
-  int year = now.year();
-  int month = now.month();
-  int day = now.day();
-  Serial.print(now.year(), DEC);
-  String fichier = String(year) + String(month) + String(day) + "0.txt";
+  String fichier;
+  fichier = now.year();
+  fichier += now.month();
+  fichier += now.day();
+  fichier += String(0);
+  fichier += ".log";
   Serial.println(fichier);
   File myFile = SD.open(fichier, FILE_WRITE);
   if (myFile.size() <= FILE_MAX_SIZE) 
@@ -177,7 +178,12 @@ void Write(String valeur) {
   else {
     myFile.close();
     revision = revision + 1;
-    String fileName = String(year) + String(month) + String(day) + String(revision) + ".txt";
+    String fileName;
+    fileName = now.year();
+    fileName += now.month();
+    fileName += now.day();
+    fileName += revision;
+    fileName += ".log";
     if (SD.exists(fichier)) {
       myFile = SD.open(fichier, FILE_READ);
       if (myFile) {
