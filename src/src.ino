@@ -7,13 +7,13 @@
 
 Adafruit_BME280 bme;
 TinyGPSPlus gps;
-RTC_DS3231 RTC;
+RTC_DS1307 rtc;
 
 #define BUTTON_RED 2
 #define BUTTON_GREEN 3
 #define MODULELUM A0
-#define RX 5 //pin GPS
-#define TX 6  //pin GPS
+#define RX 7 //pin GPS
+#define TX 8 //pin GPS
 
 SoftwareSerial GPS(RX, TX);
 ChainableLED led(4, 5, 1);
@@ -22,7 +22,6 @@ ChainableLED led(4, 5, 1);
 bool levier;
 byte mode;
 bool state = false;
-String gps_data;
 
 unsigned long debutRed = 0;
 unsigned long debutGreen = 0;
@@ -33,7 +32,6 @@ const unsigned long CONFIGURATION_TIMEOUT = 100000;
 unsigned long LOG_INTERVALL = 1000;
 unsigned long FILE_MAX_SIZE = 2000;
 bool RESET = 0;
-//float VERSION = 1.0;
 uint8_t revision = 0 ;
 
 bool LUMIN = true ;
@@ -42,7 +40,7 @@ bool HYGR = true;
 bool PRESSURE = true;
 
 uint16_t LUMIN_LOW = 255;
-uint16_t LUMIN_HIGH = 255;
+uint16_t LUMIN_HIGH = 768;
 int8_t MIN_TEMP_AIR = -10;
 int8_t MAX_TEMP_AIR = 60;
 int8_t HYGR_MINT = 0;
@@ -75,13 +73,19 @@ enum DAY {
 void setup() {
   Serial.begin(9600);
   led.init();
-  RTC.begin();
-  RTC.adjust(DateTime(F(__DATE__), F(__TIME__)));
+  GPS.begin(9600);
   mode = 0;
   pinMode(BUTTON_RED, INPUT_PULLUP);
   pinMode(BUTTON_GREEN, INPUT_PULLUP);
   attachInterrupt(digitalPinToInterrupt(BUTTON_RED), clickButtonRedEvent, FALLING);
   attachInterrupt(digitalPinToInterrupt(BUTTON_GREEN), clickButtonGreenEvent, FALLING);
+
+  checkError(0); // rtc
+  //checkError(1); // gps
+  checkError(2); // captor access
+  //checkError(3); // data coherence
+  //checkError(4); // SD full
+  checkError(5); // SD available
 
   if (digitalRead(BUTTON_RED) == LOW) {
     configModeStartTime = millis();
@@ -91,10 +95,8 @@ void setup() {
 
 void loop() {
   switch (mode) {
-    
     case 1: // mode config
       if (millis() - configModeStartTime >= CONFIGURATION_TIMEOUT) {
-        //Serial.println(CONFIGURATION_TIMEOUT);
         mode = 0;
       }
       led.setColorRGB(0, 255, 200, 0);
@@ -134,18 +136,14 @@ void loop() {
           state = true;
           mode = 2;
         }
-        else if ((millis() - debutGreen >= 5000) && digitalRead(BUTTON_GREEN) == 0) {
-          mode = 3;
-        }
+      else if ((millis() - debutGreen >= 5000) && digitalRead(BUTTON_GREEN) == 0) {
+        mode = 3;
+      }
         if (millis() - timerSD >= LOG_INTERVALL) {
           Write(getData());
           timerSD = millis();
         }
         led.setColorRGB(0, 0, 255, 0);
-        checkError(0);
-        checkError(1);
-        checkError(2);
-        checkError(3);
       break;
   }
 }
@@ -160,68 +158,58 @@ void clickButtonGreenEvent() {
 }
 
 void Write(String valeur) {
-  DateTime now = RTC.now();
+  DateTime now = rtc.now();
   int year = now.year();
   int month = now.month();
   int day = now.day();
+  Serial.print(now.year(), DEC);
   String fichier = String(year) + String(month) + String(day) + "0.txt";
+  Serial.println(fichier);
   File myFile = SD.open(fichier, FILE_WRITE);
-  if (myFile.size() <= FILE_MAX_SIZE) {
-    //Serial.print(myFile.size());
-    if (myFile) {
+  if (myFile.size() <= FILE_MAX_SIZE) 
+  {
+    if (myFile) 
+    {
       myFile.print(valeur);
       myFile.close();
     }
-    /*else {
-      Serial.print(F("erreur"));
-    }*/
   }
   else {
-    //Serial.println(F("fichier plein"));
     myFile.close();
     revision = revision + 1;
     String fileName = String(year) + String(month) + String(day) + String(revision) + ".txt";
     if (SD.exists(fichier)) {
       myFile = SD.open(fichier, FILE_READ);
       if (myFile) {
-        //Serial.println(F("source ouvert"));
-        //Serial.println(fileName);
-        //Serial.println(revision);
         File myFile2 = SD.open(fileName, FILE_WRITE);
         if (SD.exists(fileName)) {
           if (myFile2) {
-          //  Serial.println(F("ouvert copie"));
             while (myFile.available()) {
               char data = myFile.read();
               myFile2.write(data);
             }
             myFile.close();
             myFile2.close();
-            //Serial.println(F("Ok"));
             SD.remove(fichier);
           }
           else {
-            //Serial.println(F("Pas ouverture de copie"));
             if (SD.exists(fileName)) {
-              //Serial.println(F("copie existante"));
             }
             else {
-              //Serial.println(F("copie pas existante"));
             }
           }
         }
         else {
-          //Serial.println(F("pas présent"));
         }
       }
       else {
-        //Serial.println(F("Pas de fichier source"));
       }
     }
   }
 }
 
 String getGPS() {
+  String gps_data;
   if (GPS.available()) {
     char c = GPS.read();
     if (c == '$') {
@@ -239,7 +227,7 @@ String getGPS() {
 String getData() {
   String text;
   char heure[10];
-  DateTime now = RTC.now();
+  DateTime now = rtc.now();
   bme.begin(0x76);
   if (LUMIN == true) {
     text += "Luminosité : ";
@@ -264,40 +252,51 @@ String getData() {
   text += "GPS : ";
   text += getGPS();
   text += "\n";
-  text += "RTC : ";
-  sprintf(heure, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
-  text += heure;
-  text += "\n";
+  // text += "\n";
+  // text += "RTC : ";
+  // sprintf(heure, "%02d:%02d:%02d", now.hour(), now.minute(), now.second());
+  // text += heure;
+  // text += "\n";
   return text;
 }
 
 bool checkError(byte i) {
   switch (i) {
     case 0: // check rtc access
-      if (!RTC.begin()) {
-        ledError(i);
+      if (!rtc.begin()) {
+        while(1)
+        {
+          ledError(i);
+        }
         return 1;
       }
       else {
-        RTC.begin();
+        rtc.begin();
+        //rtc.adjust(DateTime(F(__DATE__), F(__TIME__)));
         return 0;
       }
       break;
 
     case 1: // check gps access
       if (!GPS.available()) {
-        ledError(i);
+        while(1)
+        {
+          ledError(i);
+        }
         return 1;
       }
       else {
-        GPS.available();
+        // GPS.begin(9600);
         return 0;
       }
       break;
 
     case 2: // check captor access
       if (!bme.begin(0x76)) {
-        ledError(i);
+        while(1)
+        {
+          ledError(i);
+        }
         return 1;
       }
       else {
@@ -308,19 +307,31 @@ bool checkError(byte i) {
 
     case 3: // check data
       if ((bme.readHumidity() < HYGR_MINT) || (bme.readHumidity() > HYGR_MAXT)) {
-        ledError(i);
+        while(1)
+        {
+          ledError(i);
+        }
         return 1;
       }
       else if ((bme.readPressure() < PRESSURE_MIN) || (bme.readPressure() > PRESSURE_MAX)) {
+        while(1)
+        {
         ledError(i);
+        }
         return 1;
       }
       else if ((bme.readTemperature() < MIN_TEMP_AIR) || (bme.readTemperature() > MAX_TEMP_AIR)) {
+        while(1)
+        {
         ledError(i);
+        }
         return 1;
       }
       else if ((analogRead(MODULELUM) < LUMIN_LOW) || analogRead(MODULELUM) > LUMIN_HIGH) {
+        while(1)
+        {
         ledError(i);
+        }
         return 1;
       }
       else {
@@ -360,104 +371,127 @@ bool checkError(byte i) {
   }
 }
 
-
 void ledError(byte i) {
-  switch (i) {
-    case 0:
 
-      if (((millis() - configModeStartTime) >= 1000)) {
-        if (levier == true) {
-          led.setColorRGB(0, 255, 0, 0);
-          levier = false;
-          configModeStartTime = millis();
-        }
-        else {
-          led.setColorRGB(0, 0, 0, 255);
-          levier = true;
-          configModeStartTime = millis();
-        }
-      }
-      break;
+    switch (i) {
+      case 0:
 
-    case 1:
-      if (((millis() - configModeStartTime) >= 1000)) {
-        if (levier == true) {
-          led.setColorRGB(0, 255, 0, 0);
-          levier = false;
-          configModeStartTime = millis();
-        }
-        else {
-          led.setColorRGB(0, 255, 200, 0);
-          levier = true;
-          configModeStartTime = millis();
-        }
-      }
-      break;
+          if (((millis() - configModeStartTime) >= 1000)) {
+            if (levier == true) {
+              led.setColorRGB(0, 255, 0, 0);
+              levier = false;
+              configModeStartTime = millis();
 
-    case 2:
-      if (((millis() - configModeStartTime) >= 1000)) {
-        if (levier == true) {
-          led.setColorRGB(0, 255, 255, 255);
-          levier = false;
-          configModeStartTime = millis();
-        }
-        else if (((millis() - configModeStartTime) >= 2000)) {
-          led.setColorRGB(0, 255, 0, 0);
-          levier = true;
-          configModeStartTime = millis();
-        }
-      }
-      break;
+            }
+            else {
+              led.setColorRGB(0, 0, 0, 255);
+              levier = true;
+              configModeStartTime = millis();
 
-    case 3:
-      if (((millis() - configModeStartTime) >= 1000)) {
-        if (levier == true) {
-          led.setColorRGB(0, 255, 0, 0);
-          levier = false;
-          configModeStartTime = millis();
-        }
-        else {
-          led.setColorRGB(0, 255, 255, 255);
-          levier = true;
-          configModeStartTime = millis();
-        }
-      }
-      break;
+            }
+          }
+        
+        break;
 
-    case 4:
-      if (((millis() - configModeStartTime) >= 1000)) {
-        if (levier == true) {
-          led.setColorRGB(0, 255, 0, 0);
-          levier = false;
-          configModeStartTime = millis();
-        }
-        else {
-          led.setColorRGB(0, 0, 255, 0);
-          levier = true;
-          configModeStartTime = millis();
-        }
-      }
-      break;
+      case 1:
 
-    case 5:
-      if (((millis() - configModeStartTime) >= 1000)) {
-        if (levier == true) {
-          led.setColorRGB(0, 0, 255, 0);
-          levier = false;
-          configModeStartTime = millis();
-        }
-        else if (((millis() - configModeStartTime) >= 2000)) {
-          led.setColorRGB(0, 255, 0, 0);
-          levier = true;
-          configModeStartTime = millis();
-        }
-      }
-      break;
+          if (((millis() - configModeStartTime) >= 1000)) {
+            if (levier == true) {
+              led.setColorRGB(0, 255, 0, 0);
+              levier = false;
+              configModeStartTime = millis();
 
-    default:
-      break;
-  }
-}
+            }
+            else {
+              led.setColorRGB(0, 255, 200, 0);
+              levier = true;
+              configModeStartTime = millis();
+
+            }
+          }
+        
+        break;
+
+      case 2:
+
+          if (((millis() - configModeStartTime) >= 1000)) {
+            if (levier == true) {
+              led.setColorRGB(0, 255, 255, 255);
+              levier = false;
+              configModeStartTime = millis();
+
+            }
+            else if (((millis() - configModeStartTime) >= 2000)) {
+              led.setColorRGB(0, 255, 0, 0);
+              levier = true;
+              configModeStartTime = millis();
+
+            }
+          }
+
+        break;
+
+      case 3:
+
+          if (((millis() - configModeStartTime) >= 1000)) {
+            if (levier == true) {
+              led.setColorRGB(0, 255, 0, 0);
+              levier = false;
+              configModeStartTime = millis();
+
+            }
+            else {
+              led.setColorRGB(0, 255, 255, 255);
+              levier = true;
+              configModeStartTime = millis();
+
+            }
+          }
+        
+        break;
+
+      case 4:
+
+          if (((millis() - configModeStartTime) >= 1000)) {
+            if (levier == true) {
+              led.setColorRGB(0, 255, 0, 0);
+              levier = false;
+              configModeStartTime = millis();
+
+            }
+            else {
+              led.setColorRGB(0, 0, 255, 0);
+              levier = true;
+              configModeStartTime = millis();
+            }
+          }
+        
+        break;
+
+      case 5:
+
+          if (((millis() - configModeStartTime) >= 1000)) {
+            if (levier == true) {
+              led.setColorRGB(0, 0, 255, 0);
+              levier = false;
+              configModeStartTime = millis();
+
+            }
+            else if (((millis() - configModeStartTime) >= 2000)) {
+              led.setColorRGB(0, 255, 0, 0);
+              levier = true;
+              configModeStartTime = millis();
+
+            }
+          }
+        
+        break;
+
+      default:
+        break;
+    }
+ }
+
 
 
 void funcConfig() 
